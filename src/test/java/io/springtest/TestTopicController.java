@@ -1,5 +1,7 @@
 package io.springtest;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.specto.hoverfly.junit.core.Hoverfly;
 import io.specto.hoverfly.junit.core.SimulationSource;
 import io.specto.hoverfly.junit.dsl.HoverflyDsl;
@@ -31,17 +33,19 @@ public class TestTopicController {
             + "   \"serviceResponse\":null\n"
             + "}";
 
-    private static final String TOPIC = "[{\n"
-            + "id\": \"Java\",\n"
+    private static final String TOPIC = "{\n"
+            + "\"id\": \"Java\",\n"
             + "\"name\": \"Java 8\",\n"
             + "\"description\": \"Good Topic\"\n"
-            + " }]";
+            + " }";
 
     private static Topic topic = new Topic("Java2", "Java 28", "Good Topic2");
 
+    ObjectMapper mapper = new ObjectMapper();
 
     @Test
     public void testWorldClock(Hoverfly hoverfly) {
+        // simulator
         hoverfly.simulate(SimulationSource.dsl(
                 HoverflyDsl
                         .service("http://testservice.com")
@@ -50,23 +54,42 @@ public class TestTopicController {
                                 .success(OUTPUT, "application/json"))
         ));
 
+        // integration
         ResponseEntity<String> res = restTemplate.getForEntity("http://testservice.com/api/test", String.class);
+
+        // custom business logic
         System.out.println("Response : " + res.getBody());
     }
 
 
     @Test
-    public void testTopicController(Hoverfly hoverfly) {
+    public void testTopicController(Hoverfly hoverfly) throws JsonProcessingException {
         hoverfly.simulate(SimulationSource.dsl(
                 HoverflyDsl
                         .service("http://topicservice.com")
-                        .get("/topics")
+                        .get("/topic")
                         .willReturn(ResponseCreators
                                 .success(TOPIC, "application/json"))
         ));
 
-        ResponseEntity<String> res = restTemplate.getForEntity("http://topicservice.com/topics", String.class);
-        System.out.println(res.getBody());
+        ResponseEntity<String> res = restTemplate.getForEntity("http://topicservice.com/topic", String.class);
+
+        Topic topic = mapper.readValue(res.getBody(), Topic.class);
+
+        System.out.println(topic.getId());
+
+        hoverfly.simulate(SimulationSource.dsl(
+                HoverflyDsl
+                        .service("http://course.com")
+                        .post("/course")
+                        .body(res.getBody())
+                        .willReturn(ResponseCreators
+                                .success(TOPIC, "application/json"))
+        ));
+
+
+        ResponseEntity<String> res2 = restTemplate.getForEntity("http://course.com/course", String.class);
+        System.out.println(res2.getBody());
     }
 
 }
